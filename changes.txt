@@ -1,0 +1,31 @@
+STREAM: 1.0 NL
+
+What's new in this drop
+==================================================================================
+  * JCK1.3a compliant. 
+  * All messages have been externalized. 
+
+PRs Fixed in 1.0NL stream (since 0.9)
+==================================================================================
+1GH3218: ITPJUI:WIN - mnuemonic problems
+1GGLLUG: ITPJCORE:WINNT - @deprecated does not work if it is followed by a TAB 
+1GG8T8H: ITPJCORE:ALL - JCK1.3a - dasg04203 - definitely assigned value before the third operand of the conditional operator ? : 
+1GG8T56: ITPJCORE:ALL - JCK1.3a - dasg04103 - definitely assigned value before the second operand of the conditional operator ? : 
+1GG8IIO: ITPJCORE:ALL - JCK1.3a - icls06602 - Outer class fields in parameters of superconstructor call in inner class 
+1GG8IDR: ITPJCORE:ALL - JCK1.3a - lex05404m1 - an unterminated unicode escape. 
+1GG8I5J: ITPJCORE:ALL - JCK1.3a - icls06308 - Invocation of constructor by this can not be qualified. 
+1GG8HBG: ITPJCORE:ALL - JCK1.3a - dasg10004 - no definitely assigned value before the first expression statement in the incrementation part of a for statement 
+1GG8G7Y: ITPJCORE:ALL - JCK1.3a - exec00202m1 - Huge amount of literals overflows constantpool space. 
+1GG8G4G: ITPJCORE:ALL - JCK1.3a - dasg01003 - definitely assigned value after the boolean operator || when true 
+1GG8BWS: ITPJCORE:ALL - JCK1.3a - dasg00603 - definitely assigned value after the boolean operator && when true 
+1G2F1DT: ITPJCORE:WINNT - Error messages non NLS for JavaModelStatus 
+1GEK7SG: ITPJCORE:WIN2000 - CodeCompletion - Code assist failure 
+1GEJDB0: ITPJCORE:WIN2000 - Open on selection doesn't work for types of length 1 
+1GDS4GV: ITPJUI:WIN2000 - Search - implementors of an interface type not found in internal jars 
+1GF6C4M: ITPJUI:WIN2000 - Eval - VerifyError while evaluating expression 
+1GFB94V: ITPJUI:ALL - Deleting a package requires 2 deletes 
+1GFVWDS: ITPJCORE:ALL - Hierarchy - Fail to compute hierarchy on org.eclipse.swt.events.MouseEvent 
+1GF9Y01: ITPCORE:WIN2000 - NPE when deleting everything in a java file and saving it. 
+1G2F1DT: ITPJCORE:WINNT - Error messages non NLS for JavaModelStatu
+1GGCQZ3: ITPJCORE:ALL - NL problems in xml fil  
+1GFIRSN: ITPJCORE:WINNT - Classpath - Should allow nesting in binary output when no source folder in on CP 
