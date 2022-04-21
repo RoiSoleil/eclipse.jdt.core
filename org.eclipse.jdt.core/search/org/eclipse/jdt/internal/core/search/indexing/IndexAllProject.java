@@ -34,6 +34,7 @@ import org.eclipse.jdt.internal.compiler.util.SimpleLookupTable;
 import org.eclipse.jdt.internal.core.ClasspathEntry;
 import org.eclipse.jdt.internal.core.JavaProject;
 import org.eclipse.jdt.internal.core.index.Index;
+import org.eclipse.jdt.internal.core.search.SearchParticipantSharedContext;
 import org.eclipse.jdt.internal.core.search.processing.JobManager;
 import org.eclipse.jdt.internal.core.util.Util;
 
@@ -63,7 +64,7 @@ public class IndexAllProject extends IndexRequest {
 		if (!this.project.isAccessible()) return true; // nothing to do
 
 		ReadWriteMonitor monitor = null;
-		try {
+		try(SearchParticipantSharedContext searchParticipantSharedContext = SearchParticipantSharedContext.create()) {
 			// Get source folder entries. Libraries are done as a separate job
 			JavaProject javaProject = (JavaProject)JavaCore.create(this.project);
 			// Do not create marker while getting raw classpath (see bug 41859)

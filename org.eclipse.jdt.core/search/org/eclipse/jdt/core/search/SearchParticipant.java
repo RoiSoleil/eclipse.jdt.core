@@ -19,6 +19,7 @@ import org.eclipse.jdt.internal.core.JavaModel;
 import org.eclipse.jdt.internal.core.JavaModelManager;
 import org.eclipse.jdt.internal.core.index.FileIndexLocation;
 import org.eclipse.jdt.internal.core.index.IndexLocation;
+import org.eclipse.jdt.internal.core.search.SearchParticipantSharedContext;
 import org.eclipse.jdt.internal.core.search.indexing.IndexManager;
 
 /**
@@ -55,6 +56,7 @@ import org.eclipse.jdt.internal.core.search.indexing.IndexManager;
 public abstract class SearchParticipant {
 
 	private IPath lastIndexLocation;
+	private SearchParticipantSharedContext searchParticipantSharedContext;
 
 	/**
 	 * Creates a new search participant.
@@ -281,4 +283,18 @@ public abstract class SearchParticipant {
 	 * @return the collection of index paths to consider
 	 */
 	public abstract IPath[] selectIndexes(SearchPattern query, IJavaSearchScope scope);
+
+	/**
+	 * @since 3.29
+	 */
+	public SearchParticipantSharedContext getSearchParticipantSharedContext() {
+		return this.searchParticipantSharedContext;
+	}
+
+	/**
+	 * @since 3.29
+	 */
+	public void setSearchParticipantSharedContext(SearchParticipantSharedContext searchParticipantSharedContext) {
+		this.searchParticipantSharedContext = searchParticipantSharedContext;
+	}
 }

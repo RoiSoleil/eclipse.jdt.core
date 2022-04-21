@@ -74,8 +74,7 @@ import org.eclipse.jdt.internal.core.index.Index;
 import org.eclipse.jdt.internal.core.index.IndexLocation;
 import org.eclipse.jdt.internal.core.index.IndexQualifier;
 import org.eclipse.jdt.internal.core.index.MetaIndex;
-import org.eclipse.jdt.internal.core.search.BasicSearchEngine;
-import org.eclipse.jdt.internal.core.search.PatternSearchJob;
+import org.eclipse.jdt.internal.core.search.*;
 import org.eclipse.jdt.internal.core.search.indexing.QualifierQuery.QueryCategory;
 import org.eclipse.jdt.internal.core.search.processing.IJob;
 import org.eclipse.jdt.internal.core.search.processing.JobManager;
@@ -244,6 +243,7 @@ public void addBinary(IFile resource, IPath containerPath) {
 public void addSource(IFile resource, IPath containerPath, SourceElementParser parser) {
 	if (JavaCore.getPlugin() == null) return;
 	SearchParticipant participant = SearchEngine.getDefaultSearchParticipant();
+	participant.setSearchParticipantSharedContext(SearchParticipantSharedContext.get());
 	SearchDocument document = participant.getDocument(resource.getFullPath().toString());
 	document.setParser(parser);
 	IndexLocation indexLocation = computeIndexLocation(containerPath);
