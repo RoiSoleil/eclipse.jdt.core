@@ -55,6 +55,7 @@ import org.eclipse.jdt.internal.core.JavaModelManager;
 import org.eclipse.jdt.internal.core.JavaProject;
 import org.eclipse.jdt.internal.core.SourceTypeElementInfo;
 import org.eclipse.jdt.internal.core.jdom.CompilationUnit;
+import org.eclipse.jdt.internal.core.search.SearchParticipantSharedContext;
 import org.eclipse.jdt.internal.core.search.matching.IndexBasedJavaSearchEnvironment;
 import org.eclipse.jdt.internal.core.search.matching.MethodPattern;
 import org.eclipse.jdt.internal.core.search.processing.JobManager;
@@ -166,9 +167,25 @@ public class SourceIndexer extends AbstractIndexer implements ITypeRequestor, Su
 			this.cud = this.basicParser.parse(this.compilationUnit, new CompilationResult(this.compilationUnit, 0, 0, this.options.maxProblemsPerUnit));
 			JavaModelManager.getJavaModelManager().cacheZipFiles(this); // use model only for caching
 			// Use a non model name environment to avoid locks, monitors and such.
-			INameEnvironment nameEnvironment = IndexBasedJavaSearchEnvironment.create(Collections.singletonList((IJavaProject)javaProject), JavaModelManager.getJavaModelManager().getWorkingCopies(DefaultWorkingCopyOwner.PRIMARY, true/*add primary WCs*/));
-			this.lookupEnvironment = new LookupEnvironment(this, this.options, problemReporter, nameEnvironment);
+			SearchParticipantSharedContext searchParticipantSharedContext = this.document.getParticipant().getSearchParticipantSharedContext();
+			org.eclipse.jdt.core.ICompilationUnit[] workingCopies = JavaModelManager.getJavaModelManager()
+					.getWorkingCopies(DefaultWorkingCopyOwner.PRIMARY, true/* add primary WCs */);
+			if (searchParticipantSharedContext != null) {
+				this.lookupEnvironment = searchParticipantSharedContext.getSharedLookupEnvironment(this, javaProject, workingCopies, this.options, problemReporter);
+			}
+			if (this.lookupEnvironment == null) {
+				INameEnvironment nameEnvironment = IndexBasedJavaSearchEnvironment.create(
+						Collections.singletonList((IJavaProject) javaProject), workingCopies);
+				this.lookupEnvironment = new LookupEnvironment(this, this.options, problemReporter, nameEnvironment);
+			}
 			reduceParseTree(this.cud);
+
+//			if (contextualSearchParticipant == null || contextualSearchParticipant.knows(path.toString())) {
+//				PlainPackageBinding plainPackage = this.lookupEnvironment.createPlainPackage(this.cud.currentPackage.tokens);
+//				if (plainPackage != null && plainPackage.knownTypes != null && plainPackage.knownTypes.containsKey(this.cud.getMainTypeName())) {
+//					plainPackage.knownTypes.put(this.cud.getMainTypeName(), null);
+//				}
+//			}
 			this.lookupEnvironment.buildTypeBindings(this.cud, null);
 			this.lookupEnvironment.completeTypeBindings();
 			this.cud.scope.faultInTypes();
