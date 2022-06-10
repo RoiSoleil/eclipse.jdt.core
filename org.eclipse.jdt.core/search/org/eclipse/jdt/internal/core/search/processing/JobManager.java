@@ -26,6 +26,7 @@ import org.eclipse.core.runtime.SubMonitor;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jdt.internal.core.util.Messages;
 import org.eclipse.jdt.internal.core.util.Util;
+import org.eclipse.jdt.internal.core.JavaModelManager;
 
 public abstract class JobManager implements Runnable {
 
@@ -407,6 +408,7 @@ public abstract class JobManager implements Runnable {
 
 						// must check for new job inside this sync block to avoid timing hole
 						if ((job = currentJob()) == null) {
+							JavaModelManager.getJavaModelManager().flushZipFiles(this);
 							Job pJob = this.progressJob;
 							if (pJob != null) {
 								pJob.cancel();
@@ -422,6 +424,7 @@ public abstract class JobManager implements Runnable {
 						}
 					}
 					if (job == null) {
+						JavaModelManager.getJavaModelManager().flushZipFiles(this);
 						notifyIdle(System.currentTimeMillis() - idlingStart);
 						// just woke up, delay before processing any new jobs, allow some time for the active thread to finish
 						synchronized (this.idleMonitor) {
@@ -442,6 +445,7 @@ public abstract class JobManager implements Runnable {
 							pJob.schedule();
 							this.progressJob = pJob;
 						}
+						JavaModelManager.getJavaModelManager().cacheZipFiles(this);
 						/*boolean status = */job.execute(null);
 						//if (status == FAILED) request(job);
 					} finally {
