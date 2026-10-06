@@ -68,11 +68,7 @@ boolean isIncrementalBuild;
 ClasspathMultiDirectory[] sourceLocations;
 ClasspathLocation[] binaryLocations;
 Map<String,IModulePathEntry> modulePathEntries; // is null when performing a non-modular compilation
-/**
- * Per qualified package name, the binary locations which may contain that package, in classpath order.
- * Jars which do not declare the package are left out, all other locations are kept.
- */
-private final Map<String, ClasspathLocation[]> binaryLocationsByPackage = new ConcurrentHashMap<>();
+Map<String, ClasspathLocation[]> binaryLocationsByPackage = new ConcurrentHashMap<>();
 BuildNotifier notifier;
 
 SimpleSet initialTypeNames; // assumed that each name is of the form "a/b/ClassName", or, if a module is given: "my.mod:a/b/ClassName"
