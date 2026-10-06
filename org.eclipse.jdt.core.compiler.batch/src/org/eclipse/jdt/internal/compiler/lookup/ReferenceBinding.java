@@ -90,6 +90,9 @@ abstract public class ReferenceBinding extends TypeBinding {
 	char[] fileName;
 	char[] constantPoolName;
 	char[] signature;
+	// cache for hashCode(): the hash of hashedSimpleName, the last segment of compoundName when it was computed
+	private char[] hashedSimpleName;
+	private int simpleNameHash;
 
 	protected Map<TypeBinding, Boolean> compatibleCache;
 
@@ -1236,9 +1239,15 @@ public TypeVariableBinding getTypeVariable(char[] variableName) {
 public int hashCode() {
 	// ensure ReferenceBindings hash to the same position as UnresolvedReferenceBindings so they can be replaced without rehashing
 	// ALL ReferenceBindings are unique when created so equals() is the same as ==
-	return (this.compoundName == null || this.compoundName.length == 0)
-		? super.hashCode()
-		: CharOperation.hashCode(this.compoundName[this.compoundName.length - 1]);
+	char[][] name = this.compoundName;
+	if (name == null || name.length == 0)
+		return super.hashCode();
+	char[] simpleName = name[name.length - 1];
+	if (simpleName != this.hashedSimpleName) { // compoundName may be reassigned, e.g. by ParameterizedTypeBinding
+		this.simpleNameHash = CharOperation.hashCode(simpleName);
+		this.hashedSimpleName = simpleName;
+	}
+	return this.simpleNameHash;
 }
 
 /**
