@@ -197,18 +197,16 @@ public class AnnotatableTypeSystem extends TypeSystem {
 
 		WildcardBinding nakedType = null;
 		boolean useDerivedTypesOfBound = bound instanceof TypeVariableBinding || (bound instanceof ParameterizedTypeBinding && !(bound instanceof RawTypeBinding)) ;
-		TypeBinding[] derivedTypes = getDerivedTypes(useDerivedTypesOfBound ? bound : genericType);
-		for (TypeBinding derivedType : derivedTypes) {
-			if (derivedType == null)
-				break;
-			if (!derivedType.isWildcard() || derivedType.actualType() != genericType || derivedType.rank() != rank) //$IDENTITY-COMPARISON$
+		DerivedWildcards derivedWildcards = getDerivedWildcards(useDerivedTypesOfBound ? bound : genericType);
+		for (int i = 0; i < derivedWildcards.count; i++) {
+			WildcardBinding derivedWildcard = derivedWildcards.wildcards[i];
+			if (derivedWildcard.actualType() != genericType || derivedWildcard.rank() != rank) //$IDENTITY-COMPARISON$
 				continue;
-			if (derivedType.boundKind() != boundKind || derivedType.bound() != bound || !Util.effectivelyEqual(derivedType.additionalBounds(), otherBounds)) //$IDENTITY-COMPARISON$
+			if (derivedWildcard.boundKind() != boundKind || derivedWildcard.bound() != bound || !Util.effectivelyEqual(derivedWildcard.additionalBounds(), otherBounds)) //$IDENTITY-COMPARISON$
 				continue;
-			WildcardBinding derivedWildcard = (WildcardBinding) derivedType;
-			if (Util.effectivelyEqual(derivedType.getTypeAnnotations(), annotations) && derivedWildcard.hasNullTagBits(objectBoundNullTagBits))
+			if (Util.effectivelyEqual(derivedWildcard.getTypeAnnotations(), annotations) && derivedWildcard.hasNullTagBits(objectBoundNullTagBits))
 				return derivedWildcard;
-			if (!derivedType.hasTypeAnnotations())
+			if (!derivedWildcard.hasTypeAnnotations())
 				nakedType = derivedWildcard;
 		}
 

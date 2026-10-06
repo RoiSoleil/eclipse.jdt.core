@@ -199,8 +199,48 @@ public class TypeSystem {
 		}
 	}
 
+	/**
+	 * The wildcards among the derived types of one slot of {@link TypeSystem#types}, in the same order.
+	 * <p>
+	 * Derived types are only ever appended to a slot (at its first null entry), or the slot is replaced
+	 * by a larger copy, so this view is brought up to date by scanning the entries appended since the
+	 * last lookup. The only other in-place writes swap an unresolved type for its resolution (never a
+	 * wildcard), or compact the slot of a capture, which is why captures are not indexed.
+	 * </p>
+	 */
+	static final class DerivedWildcards {
+		private static final WildcardBinding[] NO_WILDCARDS = new WildcardBinding[0];
+
+		final TypeBinding[] derivedTypes;
+		WildcardBinding[] wildcards = NO_WILDCARDS;
+		int count;
+		/** Index of the first entry of {@link #derivedTypes} not scanned yet: its first null entry, or its length, after {@link #update()}. */
+		int firstUnscanned;
+
+		DerivedWildcards(TypeBinding[] derivedTypes) {
+			this.derivedTypes = derivedTypes;
+		}
+
+		DerivedWildcards update() {
+			int i = this.firstUnscanned, length = this.derivedTypes.length;
+			for (; i < length; i++) {
+				TypeBinding derivedType = this.derivedTypes[i];
+				if (derivedType == null)
+					break;
+				if (derivedType.isWildcard()) {
+					if (this.count == this.wildcards.length)
+						System.arraycopy(this.wildcards, 0, this.wildcards = new WildcardBinding[this.count == 0 ? 4 : this.count * 2], 0, this.count);
+					this.wildcards[this.count++] = (WildcardBinding) derivedType;
+				}
+			}
+			this.firstUnscanned = i;
+			return this;
+		}
+	}
+
 	private int typeid = TypeIds.T_LastWellKnownTypeId;
 	private TypeBinding [][] types;
+	private DerivedWildcards [] derivedWildcardsTable; // auxiliary fast lookup table for wildcards, parallel to types
 	protected HashedParameterizedTypes parameterizedTypes;  // auxiliary fast lookup table for parameterized types.
 	private SimpleLookupTable annotationTypes; // cannot store in types, since AnnotationBinding is not a TypeBinding and we don't want types to operate at Binding level.
 	LookupEnvironment environment;
@@ -210,6 +250,7 @@ public class TypeSystem {
 		this.annotationTypes = new SimpleLookupTable(16);
 		this.typeid = TypeIds.T_LastWellKnownTypeId;
 		this.types = new TypeBinding[TypeIds.T_LastWellKnownTypeId * 2][];
+		this.derivedWildcardsTable = new DerivedWildcards[this.types.length];
 		this.parameterizedTypes = new HashedParameterizedTypes();
 	}
 
@@ -388,21 +429,20 @@ public class TypeSystem {
 		TypeBinding unannotatedBound = bound == null ? null : getUnannotatedType(bound);
 
 		boolean useDerivedTypesOfBound = unannotatedBound instanceof TypeVariableBinding || (unannotatedBound instanceof ParameterizedTypeBinding && !(unannotatedBound instanceof RawTypeBinding));
-		TypeBinding[] derivedTypes = this.types[useDerivedTypesOfBound ? unannotatedBound.id :unannotatedGenericType.id];  // by construction, cachedInfo != null now.
+		DerivedWildcards derivedWildcards = getDerivedWildcards(useDerivedTypesOfBound ? unannotatedBound : unannotatedGenericType);
+		TypeBinding[] derivedTypes = derivedWildcards.derivedTypes;  // by construction, cachedInfo != null now.
 
-		int i, length = derivedTypes.length;
-		for (i = 0; i < length; i++) {
-			TypeBinding derivedType = derivedTypes[i];
-			if (derivedType == null)
-				break;
-			if (!derivedType.isWildcard() || derivedType.actualType() != unannotatedGenericType || derivedType.hasTypeAnnotations()) //$IDENTITY-COMPARISON$
+		for (int j = 0; j < derivedWildcards.count; j++) {
+			WildcardBinding derivedType = derivedWildcards.wildcards[j];
+			if (derivedType.actualType() != unannotatedGenericType || derivedType.hasTypeAnnotations()) //$IDENTITY-COMPARISON$
 				continue;
 			if (derivedType.rank() != rank || derivedType.boundKind() != boundKind || derivedType.bound() != unannotatedBound) //$IDENTITY-COMPARISON$
 				continue;
 			if (Util.effectivelyEqual(derivedType.additionalBounds(), unannotatedOtherBounds))
-				return (WildcardBinding) derivedType;
+				return derivedType;
 		}
 
+		int i = derivedWildcards.firstUnscanned, length = derivedTypes.length;
 		if (i == length) {
 			System.arraycopy(derivedTypes, 0, derivedTypes = new TypeBinding[length * 2], 0, length);
 			this.types[useDerivedTypesOfBound ? unannotatedBound.id :unannotatedGenericType.id] = derivedTypes;
@@ -469,6 +509,25 @@ public class TypeSystem {
 	protected final TypeBinding /* @NonNull */ [] getDerivedTypes(TypeBinding keyType) {
 		keyType = getUnannotatedType(keyType);
 		return this.types[keyType.id];
+	}
+
+	/**
+	 * Answers the wildcards among the derived types of the given key type, in the same order as in
+	 * {@link #getDerivedTypes(TypeBinding)}. {@link DerivedWildcards#firstUnscanned} is the first null
+	 * slot of {@link DerivedWildcards#derivedTypes}, or its length if it is full.
+	 */
+	protected final DerivedWildcards getDerivedWildcards(TypeBinding keyType) {
+		keyType = getUnannotatedType(keyType);
+		TypeBinding[] derivedTypes = this.types[keyType.id];
+		if (keyType instanceof CaptureBinding) // its slot can be compacted in place, see CaptureBinding.getDerivedTypesForDeferredInitialization()
+			return new DerivedWildcards(derivedTypes).update();
+		int derivedWildcardsLength = this.derivedWildcardsTable.length;
+		if (keyType.id >= derivedWildcardsLength)
+			System.arraycopy(this.derivedWildcardsTable, 0, this.derivedWildcardsTable = new DerivedWildcards[this.types.length], 0, derivedWildcardsLength);
+		DerivedWildcards derivedWildcards = this.derivedWildcardsTable[keyType.id];
+		if (derivedWildcards == null || derivedWildcards.derivedTypes != derivedTypes)
+			this.derivedWildcardsTable[keyType.id] = derivedWildcards = new DerivedWildcards(derivedTypes);
+		return derivedWildcards.update();
 	}
 
 	private TypeBinding cacheDerivedType(TypeBinding keyType, TypeBinding derivedType) {
@@ -556,6 +615,7 @@ public class TypeSystem {
 		this.annotationTypes = new SimpleLookupTable(16);
 		this.typeid = TypeIds.T_LastWellKnownTypeId;
 		this.types = new TypeBinding[TypeIds.T_LastWellKnownTypeId * 2][];
+		this.derivedWildcardsTable = new DerivedWildcards[this.types.length];
 		this.parameterizedTypes = new HashedParameterizedTypes();
 	}
 
