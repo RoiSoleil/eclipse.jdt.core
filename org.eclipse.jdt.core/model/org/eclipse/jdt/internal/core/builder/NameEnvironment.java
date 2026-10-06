@@ -21,6 +21,7 @@ package org.eclipse.jdt.internal.core.builder;
 
 import java.io.File;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.eclipse.core.resources.IContainer;
@@ -67,6 +68,11 @@ boolean isIncrementalBuild;
 ClasspathMultiDirectory[] sourceLocations;
 ClasspathLocation[] binaryLocations;
 Map<String,IModulePathEntry> modulePathEntries; // is null when performing a non-modular compilation
+/**
+ * Per qualified package name, the binary locations which may contain that package, in classpath order.
+ * Jars which do not declare the package are left out, all other locations are kept.
+ */
+private final Map<String, ClasspathLocation[]> binaryLocationsByPackage = new ConcurrentHashMap<>();
 BuildNotifier notifier;
 
 SimpleSet initialTypeNames; // assumed that each name is of the form "a/b/ClassName", or, if a module is given: "my.mod:a/b/ClassName"
@@ -549,6 +555,7 @@ public void cleanup() {
 		sourceLocation.cleanup();
 	for (ClasspathLocation binaryLocation : this.binaryLocations)
 		binaryLocation.cleanup();
+	this.binaryLocationsByPackage.clear();
 	// assume modulePathEntries are cleaned-up via the corresponding source/binaryLocations
 }
 
@@ -562,6 +569,26 @@ private void createParentFolder(IContainer parent) throws CoreException {
 		createParentFolder(parent.getParent());
 		((IFolder) parent).create(true, true, null);
 	}
+}
+
+/**
+ * Answers the binary locations which may contain the given package, in classpath order.
+ * <p>
+ * Every lookup in a {@link ClasspathJar} starts by checking {@link ClasspathJar#isPackage(String, String)},
+ * and the packages of a jar do not change until it is cleaned up, so a jar which does not declare the package
+ * can be skipped. Class folders and the JRT image are always kept, since their contents can change during a build.
+ */
+private ClasspathLocation[] binaryLocationsFor(String qualifiedPackageName) {
+	return this.binaryLocationsByPackage.computeIfAbsent(qualifiedPackageName, pkg -> {
+		List<ClasspathLocation> locations = new ArrayList<>(this.binaryLocations.length);
+		for (ClasspathLocation location : this.binaryLocations) {
+			if (!(location instanceof ClasspathJar) || location.isPackage(pkg, null))
+				locations.add(location);
+		}
+		return locations.size() == this.binaryLocations.length
+				? this.binaryLocations
+				: locations.toArray(new ClasspathLocation[locations.size()]);
+	});
 }
 
 private NameEnvironmentAnswer findClass(String qualifiedTypeName, char[] typeName, LookupStrategy strategy, String moduleName) {
@@ -613,7 +640,7 @@ private NameEnvironmentAnswer findClass(String qualifiedTypeName, char[] typeNam
 			return null;
 		}
 	} else {
-		relevantLocations = this.binaryLocations;
+		relevantLocations = binaryLocationsFor(qPackageName);
 	}
 	NameEnvironmentAnswer suggestedAnswer = null;
 	for (ClasspathLocation classpathLocation : relevantLocations) {
@@ -669,7 +696,7 @@ public char[][] getModulesDeclaringPackage(char[][] packageName, char[] moduleNa
 		case Any:
 		case Unnamed:
 			char[][] names = CharOperation.NO_CHAR_CHAR;
-			for (ClasspathLocation location : this.binaryLocations) {
+			for (ClasspathLocation location : binaryLocationsFor(pkgName)) {
 				if (strategy.matches(location, ClasspathLocation::hasModule)) {
 					char[][] declaringModules = location.getModulesDeclaringPackage(pkgName, null);
 					if (declaringModules != null)
@@ -713,7 +740,7 @@ public boolean hasCompilationUnit(char[][] qualifiedPackageName, char[] moduleNa
 		// include unnamed (search all locations):
 		case Any:
 		case Unnamed:
-			for (ClasspathLocation location : this.binaryLocations) {
+			for (ClasspathLocation location : binaryLocationsFor(pkgName)) {
 				if (strategy.matches(location, ClasspathLocation::hasModule))
 					if (location.hasCompilationUnit(pkgName, null))
 						return true;
@@ -751,7 +778,7 @@ public boolean isPackage(String qualifiedPackageName, char[] moduleName) {
 		case Any:
 		case Unnamed:
 			// NOTE: the output folders are added at the beginning of the binaryLocations
-			for (ClasspathLocation binaryLocation : this.binaryLocations) {
+			for (ClasspathLocation binaryLocation : binaryLocationsFor(qualifiedPackageName)) {
 				if (strategy.matches(binaryLocation, ClasspathLocation::hasModule))
 					if (binaryLocation.isPackage(qualifiedPackageName, null))
 						return true;
