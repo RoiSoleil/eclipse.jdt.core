@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2018 IBM Corporation and others.
+ * Copyright (c) 2006, 2026 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -5648,5 +5648,54 @@ public class StackMapAttributeTest extends AbstractRegressionTest {
 			"variant6:pass\n" +
 			"variant7:pass\n" +
 			"variant8:pass");
+	}
+	// The types of the constant pool entries are looked up once by class file for the stack map frames of all its methods:
+	// the class name "I" of a checkcast is the class I, the descriptor "I" of a field is int, and local types with the
+	// same name in different methods are different types
+	public void testTypesOfConstantPoolEntriesInSeveralMethods() {
+		this.runConformTest(
+			new String[] {
+				"X.java",
+				"public class X {\n" +
+				"    static int count;\n" +
+				"    int value = 1;\n" +
+				"    static int first(I i, boolean b) {\n" +
+				"        return b ? i.value : 0;\n" +
+				"    }\n" +
+				"    int sum(Object[] values) {\n" +
+				"        int total = 0;\n" +
+				"        for (Object o : values) {\n" +
+				"            I i = o instanceof I ? (I) o : null;\n" +
+				"            total += i != null ? i.value : this.value;\n" +
+				"        }\n" +
+				"        return total;\n" +
+				"    }\n" +
+				"    static String locals(boolean b) {\n" +
+				"        class Local { String name() { return \"first\"; } }\n" +
+				"        Object o = b ? new Local() : null;\n" +
+				"        String s = o == null ? \"none\" : ((Local) o).name();\n" +
+				"        Local[] array = { new Local() };\n" +
+				"        return s + array.length;\n" +
+				"    }\n" +
+				"    static String otherLocals(boolean b) {\n" +
+				"        class Local { String name() { return \"second\"; } }\n" +
+				"        Object o = b ? new Local() : null;\n" +
+				"        String s = o == null ? \"none\" : ((Local) o).name();\n" +
+				"        Runnable r = new Runnable() { public void run() { count++; } };\n" +
+				"        Runnable[] runnables = b ? new Runnable[] { r } : new Runnable[0];\n" +
+				"        for (Runnable each : runnables) each.run();\n" +
+				"        return s + count;\n" +
+				"    }\n" +
+				"    public static void main(String[] args) {\n" +
+				"        System.out.println(first(new I(), true) + \" \" + new X().sum(new Object[] { new I(), \"x\", new I() }));\n" +
+				"        System.out.println(locals(true) + locals(false));\n" +
+				"        System.out.println(otherLocals(true) + otherLocals(false));\n" +
+				"    }\n" +
+				"}\n" +
+				"class I { int value = 2; }",
+			},
+			"2 5\n" +
+			"first1none1\n" +
+			"second1none1");
 	}
 }

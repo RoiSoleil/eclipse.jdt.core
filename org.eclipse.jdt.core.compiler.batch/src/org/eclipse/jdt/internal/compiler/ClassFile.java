@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2024 IBM Corporation and others.
+ * Copyright (c) 2000, 2026 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -63,6 +63,7 @@ import org.eclipse.jdt.internal.compiler.problem.AbortType;
 import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
 import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
 import org.eclipse.jdt.internal.compiler.problem.ShouldNotImplement;
+import org.eclipse.jdt.internal.compiler.util.HashtableOfObject;
 import org.eclipse.jdt.internal.compiler.util.Messages;
 import org.eclipse.jdt.internal.compiler.util.Util;
 
@@ -119,6 +120,10 @@ public class ClassFile implements TypeConstants, TypeIds {
 	public List<TypeBinding> missingTypes = null;
 
 	public Set<TypeBinding> visitedTypes;
+
+	// types of the descriptors and class names of the constant pool, see getTypeBinding(char[], Scope, boolean)
+	private HashtableOfObject typeBindingsByDescriptor;
+	private HashtableOfObject typeBindingsByClassName;
 
 	public static final int INITIAL_CONTENTS_SIZE = 400;
 	public static final int INITIAL_HEADER_SIZE = 1500;
@@ -6028,6 +6033,8 @@ public class ClassFile implements TypeConstants, TypeIds {
 	}
 	public void reset(/*@Nullable*/SourceTypeBinding typeBinding, CompilerOptions options) {
 		// the code stream is reinitialized for each method
+		this.typeBindingsByDescriptor = null;
+		this.typeBindingsByClassName = null;
 		if (typeBinding != null) {
 			this.referenceBinding = typeBinding;
 			this.isNestedType = typeBinding.isNestedType();
@@ -6150,7 +6157,32 @@ public class ClassFile implements TypeConstants, TypeIds {
 		return result;
 	}
 
+	/**
+	 * The stack map frames of every method need the types of the constant pool entries that the bytecodes use:
+	 * they are looked up once by class file, not once by bytecode. Only valid bindings are kept: a local type
+	 * may be found only once its inner class entry is recorded.
+	 */
 	private TypeBinding getTypeBinding(char[] typeConstantPoolName, Scope scope, boolean checkcast) {
+		HashtableOfObject cache;
+		if (checkcast) {
+			if (this.typeBindingsByClassName == null)
+				this.typeBindingsByClassName = new HashtableOfObject();
+			cache = this.typeBindingsByClassName;
+		} else {
+			if (this.typeBindingsByDescriptor == null)
+				this.typeBindingsByDescriptor = new HashtableOfObject();
+			cache = this.typeBindingsByDescriptor;
+		}
+		TypeBinding type = (TypeBinding) cache.get(typeConstantPoolName);
+		if (type == null) {
+			type = computeTypeBinding(typeConstantPoolName, scope, checkcast);
+			if (type != null && type.isValidBinding())
+				cache.put(typeConstantPoolName, type);
+		}
+		return type;
+	}
+
+	private TypeBinding computeTypeBinding(char[] typeConstantPoolName, Scope scope, boolean checkcast) {
 		if (typeConstantPoolName.length == 1 && !checkcast) {
 			// base type
 			switch(typeConstantPoolName[0]) {
