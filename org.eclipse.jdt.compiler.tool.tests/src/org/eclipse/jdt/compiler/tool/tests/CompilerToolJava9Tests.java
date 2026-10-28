@@ -21,6 +21,8 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.Writer;
+import java.lang.module.ModuleFinder;
+import java.lang.module.ModuleReference;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -35,6 +37,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 import javax.lang.model.SourceVersion;
 import javax.tools.Diagnostic;
@@ -154,6 +157,25 @@ public class CompilerToolJava9Tests extends TestCase {
 			}
 		}
 
+	}
+	/**
+	 * The system modules of the Eclipse file manager are those of the running JDK.
+	 */
+	public void testListLocationsForSystemModules() throws IOException {
+		if (this.isJREBelow9) return;
+		Set<String> expected = new TreeSet<>();
+		for (ModuleReference module : ModuleFinder.ofSystem().findAll()) {
+			expected.add(module.descriptor().name());
+		}
+		try (StandardJavaFileManager manager = this.compilers[1].getStandardFileManager(null, Locale.getDefault(), Charset.defaultCharset())) {
+			Set<String> modules = new TreeSet<>();
+			for (Set<Location> locations : manager.listLocationsForModules(StandardLocation.SYSTEM_MODULES)) {
+				for (Location location : locations) {
+					modules.add(manager.inferModuleName(location));
+				}
+			}
+			assertEquals(expected, modules);
+		}
 	}
 	public void testSupportedCompilerVersions() throws IOException {
 		if (this.isJREBelow9) return;

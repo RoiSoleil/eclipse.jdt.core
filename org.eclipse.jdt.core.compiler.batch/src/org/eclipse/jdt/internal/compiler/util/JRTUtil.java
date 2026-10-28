@@ -76,7 +76,9 @@ public class JRTUtil {
 		 * Invoked when a root directory of a module being visited. The element returned
 		 * contains only the module name segment - e.g. "java.base". Clients can use this to control
 		 * how the JRT needs to be processed, for e.g., clients can skip a particular module
-		 * by returning FileVisitResult.SKIP_SUBTREE
+		 * by returning FileVisitResult.SKIP_SUBTREE. When the client is notified neither of packages
+		 * nor of files, the content of the module is skipped even if this method answers
+		 * FileVisitResult.CONTINUE.
 		 */
 		public default FileVisitResult visitModule(T path, String name) throws IOException  {
 			return FileVisitResult.CONTINUE;
@@ -229,6 +231,17 @@ public class JRTUtil {
 			return;
 		}
 		system.walkModuleImage(visitor, notify);
+	}
+
+	/**
+	 * Answers how to continue the walk once a module directory has been visited: a client that is notified neither of
+	 * packages nor of files has nothing to see inside the module, whose whole tree is then skipped.
+	 */
+	static FileVisitResult afterModule(FileVisitResult result, int notify) {
+		if (result == FileVisitResult.CONTINUE && (notify & (NOTIFY_PACKAGES | NOTIFY_FILES)) == 0) {
+			return FileVisitResult.SKIP_SUBTREE;
+		}
+		return result;
 	}
 
 	public static InputStream getContentFromJrt(File jrt, String fileName, String module) throws IOException {
@@ -387,7 +400,7 @@ class JrtFileSystemWithOlderRelease extends JrtFileSystem {
 							return FileVisitResult.SKIP_SUBTREE;
 						}
 						return ((notify & JRTUtil.NOTIFY_MODULES) == 0) ? FileVisitResult.CONTINUE
-								: visitor.visitModule(dir, JRTUtil.sanitizedFileName(mod));
+								: JRTUtil.afterModule(visitor.visitModule(dir, JRTUtil.sanitizedFileName(mod)), notify);
 					}
 					if ((notify & JRTUtil.NOTIFY_PACKAGES) == 0) {
 						// client is not interested in packages

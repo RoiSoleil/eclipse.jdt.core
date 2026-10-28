@@ -18,7 +18,13 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.tests.junit.extension.TestCase;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
@@ -127,6 +133,109 @@ public class JrtUtilTest extends TestCase {
 		} finally {
 			Thread.interrupted();
 		}
+	}
+
+	/**
+	 * A walk notified only of modules skips the content of the modules, and must still visit the same modules as a
+	 * walk notified of everything.
+	 */
+	@Test
+	public void testWalkModulesOnly() throws IOException {
+		for (JrtFileSystem system : getSystems()) {
+			List<String> packages = new ArrayList<>();
+			List<String> files = new ArrayList<>();
+			List<String> modules = walk(system, JRTUtil.NOTIFY_MODULES, FileVisitResult.CONTINUE, packages, files);
+			assertEquals("Only modules were asked for", Collections.emptyList(), packages);
+			assertEquals("Only modules were asked for", Collections.emptyList(), files);
+
+			List<String> allModules = walk(system, JRTUtil.NOTIFY_ALL, FileVisitResult.CONTINUE, packages, files);
+			assertEquals(system.toString(), sorted(allModules), sorted(modules));
+			assertEquals(system.toString(), !allModules.isEmpty(), !packages.isEmpty());
+			assertEquals(system.toString(), !allModules.isEmpty(), !files.isEmpty());
+		}
+		assertTrue(walk(JRTUtil.getJrtSystem(this.image, null), JRTUtil.NOTIFY_MODULES, FileVisitResult.CONTINUE,
+				new ArrayList<>(), new ArrayList<>()).contains("java.base"));
+	}
+
+	/**
+	 * The content of the modules is still walked when packages or files are asked for besides the modules.
+	 */
+	@Test
+	public void testWalkModulesAndContent() throws IOException {
+		JrtFileSystem system = JRTUtil.getJrtSystem(this.image, null);
+		List<String> packages = new ArrayList<>();
+		List<String> files = new ArrayList<>();
+		List<String> modules = walk(system, JRTUtil.NOTIFY_MODULES | JRTUtil.NOTIFY_FILES, FileVisitResult.CONTINUE, packages, files);
+		assertTrue(modules.contains("java.base"));
+		assertEquals(Collections.emptyList(), packages);
+		assertTrue(files.contains("java.base/java/lang/Object.class"));
+
+		files.clear();
+		modules = walk(system, JRTUtil.NOTIFY_MODULES | JRTUtil.NOTIFY_PACKAGES, FileVisitResult.CONTINUE, packages, files);
+		assertTrue(modules.contains("java.base"));
+		assertTrue(packages.contains("java.base/java/lang"));
+		assertEquals(Collections.emptyList(), files);
+
+		packages.clear();
+		modules = walk(system, JRTUtil.NOTIFY_PACKAGES | JRTUtil.NOTIFY_FILES, FileVisitResult.CONTINUE, packages, files);
+		assertEquals(Collections.emptyList(), modules);
+		assertTrue(packages.contains("java.base/java/lang"));
+		assertTrue(files.contains("java.base/java/lang/Object.class"));
+	}
+
+	/**
+	 * Skipping the content of a module must not override what the visitor of the module answers.
+	 */
+	@Test
+	public void testWalkModulesOnlyHonorsVisitor() throws IOException {
+		for (JrtFileSystem system : getSystems()) {
+			for (FileVisitResult result : FileVisitResult.values()) {
+				List<String> modules = walk(system, JRTUtil.NOTIFY_MODULES, result, new ArrayList<>(), new ArrayList<>());
+				// the walk of the content does not skip anything by itself
+				List<String> expected = walk(system, JRTUtil.NOTIFY_ALL, result, new ArrayList<>(), new ArrayList<>());
+				assertEquals(system + " " + result, expected, modules);
+			}
+		}
+		// an older release walks each of its roots in ct.sym, the image of the JDK has a single root
+		JrtFileSystem system = JRTUtil.getJrtSystem(this.image, null);
+		assertEquals(1, walk(system, JRTUtil.NOTIFY_MODULES, FileVisitResult.SKIP_SIBLINGS, new ArrayList<>(), new ArrayList<>()).size());
+		assertEquals(1, walk(system, JRTUtil.NOTIFY_MODULES, FileVisitResult.TERMINATE, new ArrayList<>(), new ArrayList<>()).size());
+	}
+
+	private List<JrtFileSystem> getSystems() throws IOException {
+		int majorVersionSegment = getMajorVersionSegment(this.jdkRelease);
+		return List.of(JRTUtil.getJrtSystem(this.image, null), JRTUtil.getJrtSystem(this.image, String.valueOf(majorVersionSegment - 2)));
+	}
+
+	private static List<String> walk(JrtFileSystem system, int notify, FileVisitResult moduleResult, List<String> packages,
+			List<String> files) throws IOException {
+		List<String> modules = new ArrayList<>();
+		JRTUtil.walkModuleImage(system, new JRTUtil.JrtFileVisitor<Path>() {
+			@Override
+			public FileVisitResult visitModule(Path path, String name) {
+				modules.add(name);
+				return moduleResult;
+			}
+
+			@Override
+			public FileVisitResult visitPackage(Path dir, Path mod, BasicFileAttributes attrs) {
+				packages.add(mod + "/" + dir);
+				return FileVisitResult.CONTINUE;
+			}
+
+			@Override
+			public FileVisitResult visitFile(Path file, Path mod, BasicFileAttributes attrs) {
+				files.add(mod + "/" + file);
+				return FileVisitResult.CONTINUE;
+			}
+		}, notify);
+		return modules;
+	}
+
+	private static List<String> sorted(List<String> list) {
+		List<String> copy = new ArrayList<>(list);
+		Collections.sort(copy);
+		return copy;
 	}
 
 	private static int getMajorVersionSegment(String releaseVersion) {

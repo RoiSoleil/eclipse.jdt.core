@@ -268,7 +268,7 @@ public class JrtFileSystem {
 						return FileVisitResult.SKIP_SUBTREE;
 					}
 					return ((notify & JRTUtil.NOTIFY_MODULES) == 0) ?
-							FileVisitResult.CONTINUE : visitor.visitModule(dir, JRTUtil.sanitizedFileName(mod));
+							FileVisitResult.CONTINUE : JRTUtil.afterModule(visitor.visitModule(dir, JRTUtil.sanitizedFileName(mod)), notify);
 				}
 				if ((notify & JRTUtil.NOTIFY_PACKAGES) == 0) {
 					// We are dealing with a module or not client is not interested in packages
