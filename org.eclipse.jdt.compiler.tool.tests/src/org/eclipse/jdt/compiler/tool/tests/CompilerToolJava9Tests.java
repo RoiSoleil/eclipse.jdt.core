@@ -226,6 +226,48 @@ public class CompilerToolJava9Tests extends TestCase {
 					.contains("java.sql.Connection"));
 		}
 	}
+	/**
+	 * A directory of the module path which is not a module is a directory of modules: only its packaged modules and its
+	 * exploded modules count, not its other files. A file named like a module with an extension, such as a service file of
+	 * META-INF/services, is no automatic module which would hide the real module.
+	 */
+	public void testModulePathDirectoryWithOtherFiles() throws IOException {
+		if (this.isJREBelow9) return;
+		Path root = Paths.get(_tmpFolder, "modulePathDirectory");
+		Path moduleSource = root.resolve("m-src");
+		Files.createDirectories(moduleSource.resolve("m"));
+		Files.writeString(moduleSource.resolve("module-info.java"), "module m { exports m; }");
+		Files.writeString(moduleSource.resolve("m/Foo.java"), "package m;\npublic class Foo {}");
+		Path module = root.resolve("m-bin");
+		Path other = root.resolve("other");
+		Files.createDirectories(other.resolve("META-INF/services"));
+		Files.writeString(other.resolve("META-INF/services/m.Foo"), "m.Foo\n");
+		Files.writeString(other.resolve("notes.txt"), "not a module");
+		Path appSource = root.resolve("app-src");
+		Files.createDirectories(appSource.resolve("app"));
+		Files.writeString(appSource.resolve("module-info.java"), "module app { requires m; }");
+		Files.writeString(appSource.resolve("app/Main.java"), "package app;\npublic class Main { m.Foo foo; }");
+		try (StandardJavaFileManager manager = this.compilers[0].getStandardFileManager(null, Locale.getDefault(), Charset.defaultCharset())) {
+			Iterable<? extends JavaFileObject> units = manager.getJavaFileObjectsFromPaths(
+					List.of(moduleSource.resolve("module-info.java"), moduleSource.resolve("m/Foo.java")));
+			assertTrue(this.compilers[0].getTask(null, manager, null, List.of("-d", module.toString()), null, units).call());
+		}
+		// the other directory comes first, as target/classes of a Maven build whose module-info.class was deleted
+		String modulePath = other + File.pathSeparator + module;
+		for (int i = 0; i < 2; i++) {
+			JavaCompiler compiler = this.compilers[i];
+			try (StandardJavaFileManager manager = compiler.getStandardFileManager(null, Locale.getDefault(), Charset.defaultCharset())) {
+				StringWriter stringWriter = new StringWriter();
+				PrintWriter printWriter = new PrintWriter(stringWriter);
+				Iterable<? extends JavaFileObject> units = manager.getJavaFileObjectsFromPaths(
+						List.of(appSource.resolve("module-info.java"), appSource.resolve("app/Main.java")));
+				List<String> options = List.of("--module-path", modulePath, "-d", root.resolve("app-bin-" + i).toString());
+				Boolean result = compiler.getTask(printWriter, manager, null, options, null, units).call();
+				printWriter.flush();
+				assertTrue("Compilation failed with " + compiler + ": " + stringWriter, result.booleanValue());
+			}
+		}
+	}
 	private static Set<String> systemModuleNames(JavaFileManager manager) throws IOException {
 		Set<String> modules = new TreeSet<>();
 		for (Set<Location> locations : manager.listLocationsForModules(StandardLocation.SYSTEM_MODULES)) {
