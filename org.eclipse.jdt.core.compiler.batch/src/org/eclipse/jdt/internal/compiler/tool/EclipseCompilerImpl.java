@@ -269,6 +269,10 @@ public class EclipseCompilerImpl extends Main {
 						}
 						@Override
 						public JavaFileObject getSource() {
+							// a problem of no compilation unit (a type missing during annotation processing) has no file
+							if (originatingFileName == null) {
+								return null;
+							}
 							File f = new File(new String(originatingFileName));
 							if (f.exists()) {
 								return new EclipseFileObject(null, f.toURI(), JavaFileObject.Kind.SOURCE, null);
@@ -349,6 +353,10 @@ public class EclipseCompilerImpl extends Main {
 						}
 						@Override
 						public JavaFileObject getSource() {
+							// a problem of no compilation unit (a type missing during annotation processing) has no file
+							if (originatingFileName == null) {
+								return null;
+							}
 							File f = new File(new String(originatingFileName));
 							if (f.exists()) {
 								return new EclipseFileObject(null, f.toURI(), JavaFileObject.Kind.SOURCE, null);
