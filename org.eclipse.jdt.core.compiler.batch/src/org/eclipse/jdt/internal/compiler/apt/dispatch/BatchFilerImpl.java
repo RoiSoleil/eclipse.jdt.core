@@ -195,8 +195,21 @@ public class BatchFilerImpl implements Filer {
 	public FileObject getResource(Location location, CharSequence pkg,
 			CharSequence relativeName) throws IOException {
 		validateName(relativeName);
-		FileObject fo = this._fileManager.getFileForInput(
-				location, pkg.toString(), relativeName.toString());
+		// As javac: an output location gives the file object where the file is or will be, which exists or not (the
+		// JBoss Logging processor reads its translations from CLASS_OUTPUT this way); an input location gives the
+		// file that exists, or none.
+		FileObject fo;
+		if (location.isOutputLocation()) {
+			// without -s the generated sources go to the class output, as with javac
+			if (location == StandardLocation.SOURCE_OUTPUT && !this._fileManager.hasLocation(location)) {
+				location = StandardLocation.CLASS_OUTPUT;
+			}
+			fo = this._fileManager.hasLocation(location)
+					? this._fileManager.getFileForOutput(location, pkg.toString(), relativeName.toString(), null)
+					: null; // no output directory at all: a FileNotFoundException below, which a processor expects
+		} else {
+			fo = this._fileManager.getFileForInput(location, pkg.toString(), relativeName.toString());
+		}
 		if (fo == null) {
 			throw new FileNotFoundException("Resource does not exist : " + location + '/' + pkg + '/' + relativeName); //$NON-NLS-1$
 		}
